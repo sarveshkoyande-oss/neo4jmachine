@@ -110,7 +110,7 @@ async function startServer() {
     const toPrimitive = (val: any): string => {
       if (val === null || val === undefined) return '';
       if (typeof val === 'object') {
-        return val.text || val.description || val.value || JSON.stringify(val);
+        return val.text || val.description || val.summary || val.value || JSON.stringify(val);
       }
       return String(val);
     };
@@ -138,37 +138,37 @@ async function startServer() {
       MERGE (t:Topic {name: topic})
       MERGE (e)-[:DISCUSSES]->(t)
       
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($project_names) > 0 THEN $project_names ELSE [null] END) AS projectName
       WITH e, projectName WHERE projectName IS NOT NULL
       MERGE (p:Project {name: projectName})
       MERGE (e)-[:RELATED_TO_PROJECT]->(p)
       
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($people_mentioned) > 0 THEN $people_mentioned ELSE [null] END) AS personName
       WITH e, personName WHERE personName IS NOT NULL
       MERGE (per:Person {name: personName})
       MERGE (e)-[:MENTIONS]->(per)
       
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($decisions) > 0 THEN $decisions ELSE [null] END) AS decision
       WITH e, decision WHERE decision IS NOT NULL
       CREATE (d:Decision {text: decision, timestamp: datetime()})
       MERGE (e)-[:RESULTED_IN]->(d)
 
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($action_items) > 0 THEN $action_items ELSE [null] END) AS action
       WITH e, action WHERE action IS NOT NULL
       CREATE (ai:ActionItem {text: action, status: 'Pending', createdAt: datetime()})
       MERGE (e)-[:ASSIGNED_ACTION]->(ai)
       
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($risks) > 0 THEN $risks ELSE [null] END) AS risk
       WITH e, risk WHERE risk IS NOT NULL
       CREATE (r:Risk {text: risk, severity: 'Unknown'})
       MERGE (e)-[:IDENTIFIED_RISK]->(r)
 
-      WITH e
+      WITH DISTINCT e
       UNWIND (CASE WHEN size($thread_participants) > 0 THEN $thread_participants ELSE [null] END) AS participant
       WITH e, participant WHERE participant IS NOT NULL
       MERGE (tp:Person {name: participant})

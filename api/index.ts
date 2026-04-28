@@ -77,15 +77,26 @@ app.post('/api/ingest', async (req, res) => {
 
   // Sanitize all incoming arrays to ensure they are valid for Cypher UNWIND
   // This handles cases where Power Automate might send null/undefined for empty lists
+  // and extracts strings from objects to prevent Neo4j property errors.
+  const toPrimitive = (val: any): string => {
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'object') {
+      return val.text || val.description || val.value || JSON.stringify(val);
+    }
+    return String(val);
+  };
+
   const sanitized = {
-    ...data,
-    decisions: Array.isArray(data.decisions) ? data.decisions : [],
-    action_items: Array.isArray(data.action_items) ? data.action_items : [],
-    risks: Array.isArray(data.risks) ? data.risks : [],
-    topics: Array.isArray(data.topics) ? data.topics : [],
-    project_names: Array.isArray(data.project_names) ? data.project_names : [],
-    people_mentioned: Array.isArray(data.people_mentioned) ? data.people_mentioned : [],
-    thread_participants: Array.isArray(data.thread_participants) ? data.thread_participants : []
+    email_id: data.email_id,
+    subject: data.subject,
+    original_text: data.original_text,
+    decisions: Array.isArray(data.decisions) ? data.decisions.map(toPrimitive) : [],
+    action_items: Array.isArray(data.action_items) ? data.action_items.map(toPrimitive) : [],
+    risks: Array.isArray(data.risks) ? data.risks.map(toPrimitive) : [],
+    topics: Array.isArray(data.topics) ? data.topics.map(toPrimitive) : [],
+    project_names: Array.isArray(data.project_names) ? data.project_names.map(toPrimitive) : [],
+    people_mentioned: Array.isArray(data.people_mentioned) ? data.people_mentioned.map(toPrimitive) : [],
+    thread_participants: Array.isArray(data.thread_participants) ? data.thread_participants.map(toPrimitive) : []
   };
 
   const cypher = `

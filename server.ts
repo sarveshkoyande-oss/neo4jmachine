@@ -16,17 +16,17 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Neo4j Driver setup
-  const uri = process.env.NEO4J_URI;
-  const user = process.env.NEO4J_USER;
-  const password = process.env.NEO4J_PASSWORD;
+  // Neo4j Driver setup - Hardcoded for simplicity as requested
+  const uri = process.env.NEO4J_URI || 'neo4j+s://b9a5729a.databases.neo4j.io';
+  const user = process.env.NEO4J_USER || '9ea23d30';
+  const password = process.env.NEO4J_PASSWORD || '2DREbniRzr7FQIV5VNo0N4Zz2BpubRQ_uJxRbkY--fU';
 
   let driver: any = null;
 
   function getDriver() {
     if (!driver) {
-      if (!uri || !user || !password) {
-        console.warn('Missing Neo4j connection details in environment variables.');
+      if (!uri || user.includes('REPLACE_WITH') || password.includes('REPLACE_WITH')) {
+        console.warn('⚠️ Neo4j credentials not fully set in server.ts or environment.');
         return null;
       }
       driver = neo4j.driver(uri, neo4j.auth.basic(user, password));

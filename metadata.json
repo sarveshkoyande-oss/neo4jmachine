@@ -1,0 +1,6 @@
+{
+  "name": "Neo4j Aura Bridge",
+  "description": "Secure middleware bridge connecting Power Automate and Logic Apps to Neo4j Aura.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

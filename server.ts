@@ -108,11 +108,13 @@ async function startServer() {
     // Sanitize arrays to prevent Cypher UNWIND errors on nulls
     const sanitized = {
       ...data,
+      decisions: Array.isArray(data.decisions) ? data.decisions : [],
+      action_items: Array.isArray(data.action_items) ? data.action_items : [],
+      risks: Array.isArray(data.risks) ? data.risks : [],
       topics: Array.isArray(data.topics) ? data.topics : [],
       project_names: Array.isArray(data.project_names) ? data.project_names : [],
       people_mentioned: Array.isArray(data.people_mentioned) ? data.people_mentioned : [],
-      decisions: Array.isArray(data.decisions) ? data.decisions : [],
-      risks: Array.isArray(data.risks) ? data.risks : []
+      thread_participants: Array.isArray(data.thread_participants) ? data.thread_participants : []
     };
 
     const cypher = `
@@ -142,12 +144,24 @@ async function startServer() {
       WITH e, decision WHERE decision IS NOT NULL
       CREATE (d:Decision {text: decision, timestamp: datetime()})
       MERGE (e)-[:RESULTED_IN]->(d)
+
+      WITH e
+      UNWIND (CASE WHEN size($action_items) > 0 THEN $action_items ELSE [null] END) AS action
+      WITH e, action WHERE action IS NOT NULL
+      CREATE (ai:ActionItem {text: action, status: 'Pending', createdAt: datetime()})
+      MERGE (e)-[:ASSIGNED_ACTION]->(ai)
       
       WITH e
       UNWIND (CASE WHEN size($risks) > 0 THEN $risks ELSE [null] END) AS risk
       WITH e, risk WHERE risk IS NOT NULL
       CREATE (r:Risk {text: risk, severity: 'Unknown'})
       MERGE (e)-[:IDENTIFIED_RISK]->(r)
+
+      WITH e
+      UNWIND (CASE WHEN size($thread_participants) > 0 THEN $thread_participants ELSE [null] END) AS participant
+      WITH e, participant WHERE participant IS NOT NULL
+      MERGE (tp:Person {name: participant})
+      MERGE (e)-[:PARTICIPANT_IN]->(tp)
       
       RETURN e.id as id
     `;

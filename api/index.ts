@@ -75,19 +75,24 @@ app.post('/api/ingest', async (req, res) => {
   const session = currentDriver.session();
   const data = req.body;
 
-  // Sanitize arrays to prevent Cypher UNWIND errors on nulls
+  // Sanitize all incoming arrays to ensure they are valid for Cypher UNWIND
+  // This handles cases where Power Automate might send null/undefined for empty lists
   const sanitized = {
     ...data,
+    decisions: Array.isArray(data.decisions) ? data.decisions : [],
+    action_items: Array.isArray(data.action_items) ? data.action_items : [],
+    risks: Array.isArray(data.risks) ? data.risks : [],
     topics: Array.isArray(data.topics) ? data.topics : [],
     project_names: Array.isArray(data.project_names) ? data.project_names : [],
     people_mentioned: Array.isArray(data.people_mentioned) ? data.people_mentioned : [],
-    decisions: Array.isArray(data.decisions) ? data.decisions : [],
-    risks: Array.isArray(data.risks) ? data.risks : []
+    thread_participants: Array.isArray(data.thread_participants) ? data.thread_participants : []
   };
 
   const cypher = `
     MERGE (e:Email {id: $email_id})
-    SET e.subject = $subject, e.text = $original_text, e.processedAt = datetime()
+    SET e.subject = $subject, 
+        e.text = $original_text, 
+        e.processedAt = datetime()
     
     WITH e
     UNWIND (CASE WHEN size($topics) > 0 THEN $topics ELSE [null] END) AS topic
@@ -112,12 +117,24 @@ app.post('/api/ingest', async (req, res) => {
     WITH e, decision WHERE decision IS NOT NULL
     CREATE (d:Decision {text: decision, timestamp: datetime()})
     MERGE (e)-[:RESULTED_IN]->(d)
+
+    WITH e
+    UNWIND (CASE WHEN size($action_items) > 0 THEN $action_items ELSE [null] END) AS action
+    WITH e, action WHERE action IS NOT NULL
+    CREATE (ai:ActionItem {text: action, status: 'Pending', createdAt: datetime()})
+    MERGE (e)-[:ASSIGNED_ACTION]->(ai)
     
     WITH e
     UNWIND (CASE WHEN size($risks) > 0 THEN $risks ELSE [null] END) AS risk
     WITH e, risk WHERE risk IS NOT NULL
-    CREATE (r:Risk {text: risk})
+    CREATE (r:Risk {text: risk, discoveredAt: datetime()})
     MERGE (e)-[:IDENTIFIED_RISK]->(r)
+
+    WITH e
+    UNWIND (CASE WHEN size($thread_participants) > 0 THEN $thread_participants ELSE [null] END) AS participant
+    WITH e, participant WHERE participant IS NOT NULL
+    MERGE (tp:Person {name: participant})
+    MERGE (e)-[:PARTICIPANT_IN]->(tp)
     
     RETURN e.id as id
   `;
@@ -126,7 +143,7 @@ app.post('/api/ingest', async (req, res) => {
     if (!data.email_id) throw new Error('Missing email_id in request body');
     await session.run(cypher, sanitized);
     addLog('INGEST', 'SUCCESS', { email_id: data.email_id, subject: data.subject });
-    res.json({ success: true, message: 'Graph updated' });
+    res.json({ success: true, message: 'Graph updated successfully' });
   } catch (error: any) {
     console.error('Ingest Error:', error);
     addLog('INGEST', 'FAILURE', { payload: data, error: error.message });

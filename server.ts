@@ -34,11 +34,28 @@ async function startServer() {
     return driver;
   }
 
+  // In-memory log for last 10 requests
+  const requestLogs: any[] = [];
+  function addLog(type: string, status: 'SUCCESS' | 'FAILURE', details: any) {
+    requestLogs.unshift({
+      id: Math.random().toString(36).substring(7),
+      timestamp: new Date().toISOString(),
+      type,
+      status,
+      details
+    });
+    if (requestLogs.length > 10) requestLogs.pop();
+  }
+
   // API Endpoints
+  app.get('/api/logs', (req, res) => {
+    res.json(requestLogs);
+  });
+
   app.get('/api/health', (req, res) => {
     res.json({ 
       status: 'ok', 
-      configured: !!(uri && user && password),
+      configured: true,
       timestamp: new Date().toISOString() 
     });
   });
@@ -46,17 +63,20 @@ async function startServer() {
   app.post('/api/write', async (req, res) => {
     const currentDriver = getDriver();
     if (!currentDriver) {
+      addLog('WRITE', 'FAILURE', { error: 'Neo4j driver not configured' });
       return res.status(500).json({ error: 'Neo4j driver not configured. Check environment variables.' });
     }
 
     const { cypher, params } = req.body;
     if (!cypher) {
+      addLog('WRITE', 'FAILURE', { error: 'Missing cypher query' });
       return res.status(400).json({ error: 'Missing cypher query' });
     }
 
     const session = currentDriver.session();
     try {
       const result = await session.run(cypher, params || {});
+      addLog('WRITE', 'SUCCESS', { cypher, params });
       res.json({ 
         success: true, 
         summary: result.summary.counters.updates(),
@@ -64,6 +84,7 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error('Neo4j Write Error:', error);
+      addLog('WRITE', 'FAILURE', { cypher, params, error: error.message });
       res.status(500).json({ 
         error: error.message || 'Database error',
         code: error.code 
@@ -76,37 +97,55 @@ async function startServer() {
   // Specialized endpoint for Power Automate Email Pipeline
   app.post('/api/ingest', async (req, res) => {
     const currentDriver = getDriver();
-    if (!currentDriver) return res.status(500).json({ error: 'Database not connected' });
+    if (!currentDriver) {
+      addLog('INGEST', 'FAILURE', { error: 'Database not connected' });
+      return res.status(500).json({ error: 'Database not connected' });
+    }
 
     const data = req.body;
     const session = currentDriver.session();
+
+    // Sanitize arrays to prevent Cypher UNWIND errors on nulls
+    const sanitized = {
+      ...data,
+      topics: Array.isArray(data.topics) ? data.topics : [],
+      project_names: Array.isArray(data.project_names) ? data.project_names : [],
+      people_mentioned: Array.isArray(data.people_mentioned) ? data.people_mentioned : [],
+      decisions: Array.isArray(data.decisions) ? data.decisions : [],
+      risks: Array.isArray(data.risks) ? data.risks : []
+    };
 
     const cypher = `
       MERGE (e:Email {id: $email_id})
       SET e.subject = $subject, e.text = $original_text, e.processedAt = datetime()
       
       WITH e
-      UNWIND $topics AS topic
+      UNWIND (CASE WHEN size($topics) > 0 THEN $topics ELSE [null] END) AS topic
+      WITH e, topic WHERE topic IS NOT NULL
       MERGE (t:Topic {name: topic})
       MERGE (e)-[:DISCUSSES]->(t)
       
       WITH e
-      UNWIND $project_names AS projectName
+      UNWIND (CASE WHEN size($project_names) > 0 THEN $project_names ELSE [null] END) AS projectName
+      WITH e, projectName WHERE projectName IS NOT NULL
       MERGE (p:Project {name: projectName})
       MERGE (e)-[:RELATED_TO_PROJECT]->(p)
       
       WITH e
-      UNWIND $people_mentioned AS personName
+      UNWIND (CASE WHEN size($people_mentioned) > 0 THEN $people_mentioned ELSE [null] END) AS personName
+      WITH e, personName WHERE personName IS NOT NULL
       MERGE (per:Person {name: personName})
       MERGE (e)-[:MENTIONS]->(per)
       
       WITH e
-      UNWIND $decisions AS decision
+      UNWIND (CASE WHEN size($decisions) > 0 THEN $decisions ELSE [null] END) AS decision
+      WITH e, decision WHERE decision IS NOT NULL
       CREATE (d:Decision {text: decision, timestamp: datetime()})
       MERGE (e)-[:RESULTED_IN]->(d)
       
       WITH e
-      UNWIND $risks AS risk
+      UNWIND (CASE WHEN size($risks) > 0 THEN $risks ELSE [null] END) AS risk
+      WITH e, risk WHERE risk IS NOT NULL
       CREATE (r:Risk {text: risk, severity: 'Unknown'})
       MERGE (e)-[:IDENTIFIED_RISK]->(r)
       
@@ -114,10 +153,13 @@ async function startServer() {
     `;
 
     try {
-      await session.run(cypher, data);
+      if (!data.email_id) throw new Error('Missing email_id in request body');
+      await session.run(cypher, sanitized);
+      addLog('INGEST', 'SUCCESS', { email_id: data.email_id, subject: data.subject });
       res.json({ success: true, message: 'Email data ingested and mapped to graph.' });
     } catch (error: any) {
       console.error('Ingest Error:', error);
+      addLog('INGEST', 'FAILURE', { payload: data, error: error.message });
       res.status(500).json({ error: error.message });
     } finally {
       await session.close();
@@ -127,6 +169,7 @@ async function startServer() {
   app.post('/api/query', async (req, res) => {
     const currentDriver = getDriver();
     if (!currentDriver) {
+      addLog('QUERY', 'FAILURE', { error: 'Neo4j driver not configured' });
       return res.status(500).json({ error: 'Neo4j driver not configured.' });
     }
 
@@ -144,9 +187,11 @@ async function startServer() {
           return value;
         }));
       });
+      addLog('QUERY', 'SUCCESS', { cypher });
       res.json({ success: true, data: records });
     } catch (error: any) {
       console.error('Neo4j Query Error:', error);
+      addLog('QUERY', 'FAILURE', { cypher, error: error.message });
       res.status(500).json({ error: error.message });
     } finally {
       await session.close();

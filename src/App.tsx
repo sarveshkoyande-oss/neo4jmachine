@@ -10,6 +10,7 @@ interface BridgeStatus {
 
 export default function App() {
   const [status, setStatus] = useState<BridgeStatus | null>(null);
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
@@ -17,7 +18,11 @@ export default function App() {
 
   useEffect(() => {
     checkHealth();
-    const interval = setInterval(checkHealth, 30000);
+    fetchLogs();
+    const interval = setInterval(() => {
+      checkHealth();
+      fetchLogs();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -34,6 +39,16 @@ export default function App() {
     }
   };
 
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch('/api/logs');
+      const data = await res.json();
+      setLogs(data);
+    } catch (err) {
+      console.error('Failed to fetch logs');
+    }
+  };
+
   const runTest = async () => {
     setTestLoading(true);
     setTestResult(null);
@@ -45,6 +60,7 @@ export default function App() {
       });
       const data = await res.json();
       setTestResult(data);
+      fetchLogs();
     } catch (err: any) {
       setTestResult({ error: 'Connection test failed' });
     } finally {
@@ -76,7 +92,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column: Reality & Pipeline (Inspired by Theme) */}
-          <div className="lg:col-span-5 flex flex-col gap-6">
+          <div className="lg:col-span-4 flex flex-col gap-6">
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -89,14 +105,14 @@ export default function App() {
               <div className="space-y-4">
                 <div>
                   <p className="text-xs uppercase text-slate-500 font-bold mb-2 tracking-wider">Optimized For</p>
-                  <div className="flex gap-2">
-                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-1 rounded border border-emerald-500/20 uppercase font-bold">Bolt Protocol</span>
-                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-1 rounded border border-emerald-500/20 uppercase font-bold">Official Drivers</span>
+                  <div className="flex gap-2 text-[10px]">
+                    <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20 uppercase font-bold tracking-wider">Bolt Protocol</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20 uppercase font-bold tracking-wider">Official Drivers</span>
                   </div>
                 </div>
                 <div>
                   <p className="text-xs uppercase text-slate-500 font-bold mb-2 tracking-wider">The Conflict Zone</p>
-                  <ul className="text-sm space-y-1 text-slate-400 list-disc list-inside font-medium italic">
+                  <ul className="text-sm space-y-1 text-slate-400 list-disc list-inside font-medium border-t border-slate-800 pt-4">
                     <li>Arbitrary HTTP Calls</li>
                     <li>Power Automate / Logic Apps</li>
                     <li>Azure API Gateways</li>
@@ -110,7 +126,7 @@ export default function App() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="bg-slate-900/50 border border-slate-800 p-6 rounded-xl flex-1 hidden md:block"
+              className="bg-slate-900/50 border border-slate-800 p-6 rounded-xl hidden md:block"
             >
               <h2 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
                 <Network className="w-5 h-5 text-cyan-500" />
@@ -124,131 +140,117 @@ export default function App() {
                 <div className="w-full text-center p-3 border border-slate-700 bg-slate-800/50 rounded-lg text-xs font-mono uppercase tracking-widest text-slate-400">Neo4j Aura</div>
               </div>
             </motion.div>
-
-            {/* Ingest Endpoint Docs */}
-            <motion.div 
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.15 }}
-              className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-xl"
-            >
-              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                <Network className="w-5 h-5 text-indigo-400" />
-                Ingest Endpoint
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-[10px] uppercase text-indigo-400 font-bold mb-1 tracking-wider">Target URI</p>
-                  <code className="text-xs bg-slate-950 p-2 rounded block border border-slate-800 text-indigo-300">/api/ingest</code>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase text-indigo-400 font-bold mb-1 tracking-wider">Graph Logic</p>
-                  <p className="text-xs text-slate-500 italic leading-relaxed">Automatically parses e-mail subjects, projects, and people into a linked Neo4j graph structure.</p>
-                </div>
-              </div>
-            </motion.div>
           </div>
 
           {/* Right Column: Interactive Console & Testing */}
-          <div className="lg:col-span-7 flex flex-col gap-6">
-            {/* Terminal-style Card */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col overflow-hidden"
-            >
-              <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/80">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-3 h-3 rounded-full bg-rose-500/50 shadow-sm shadow-rose-500/20"></div>
-                    <div className="w-3 h-3 rounded-full bg-amber-500/50 shadow-sm shadow-amber-500/20"></div>
-                    <div className="w-3 h-3 rounded-full bg-emerald-500/50 shadow-sm shadow-emerald-500/20"></div>
-                  </div>
-                  <span className="ml-4 text-xs font-mono text-slate-500 uppercase tracking-widest font-bold">gateway-console</span>
-                </div>
-                <div 
-                  className={`flex items-center gap-2 px-2 py-0.5 rounded text-[10px] font-mono border ${status?.configured ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-amber-500/20 text-amber-400 bg-amber-500/5'}`}
-                >
-                  <Activity className="w-3 h-3 animate-pulse" />
-                  {status?.configured ? 'SYSTEM_ONLINE' : 'CONFIG_REQUIRED'}
-                </div>
-              </div>
-
-              <div className="p-8">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                    <Terminal className="w-5 h-5 text-cyan-400" />
-                    Interaction Matrix
-                  </h3>
-                  <button 
-                    onClick={checkHealth}
-                    className="text-[10px] font-bold text-slate-500 hover:text-cyan-400 transition-colors uppercase tracking-[0.2em]"
+          <div className="lg:col-span-8 flex flex-col gap-6">
+            {/* Console and Testing */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               {/* Testing Card */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col"
+              >
+                <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-white">Diagnostics</h3>
+                   <div 
+                    className={`flex items-center gap-2 px-2 py-0.5 rounded text-[10px] font-mono border ${status?.configured ? 'border-emerald-500/20 text-emerald-400 bg-emerald-500/5' : 'border-amber-500/20 text-amber-400 bg-amber-500/5'}`}
                   >
-                    Rescan
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-2 gap-8 mb-10">
-                  <StatusItem 
-                    label="Uptime" 
-                    value="100%" 
-                    icon={<Activity className="w-3 h-3" />}
-                    color="text-emerald-400"
-                  />
-                  <StatusItem 
-                    label="Latency" 
-                    value="&lt;15ms" 
-                    icon={<ChevronRight className="w-3 h-3" />}
-                    color="text-cyan-400"
-                  />
-                </div>
-
-                <div className="space-y-6">
-                  <p className="text-sm text-slate-400 leading-relaxed max-w-md italic font-medium">
-                    Execute high-velocity transactional logic bypass against the Bolt-optimized Aura cluster via standard HTTP REST.
-                  </p>
-
-                  <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-800">
-                    <button 
-                      onClick={runTest}
-                      disabled={testLoading || !status?.configured}
-                      className="group flex items-center gap-3 px-6 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-800/80 disabled:text-slate-600 rounded-lg font-bold text-xs uppercase tracking-widest transition-all active:scale-95 text-white shadow-lg shadow-cyan-600/10"
-                    >
-                      <Send className={`w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5 ${testLoading ? 'animate-pulse' : ''}`} />
-                      {testLoading ? 'Executing...' : 'Run Diagnostics'}
-                    </button>
+                    {status?.configured ? 'ONLINE' : 'OFFLINE'}
                   </div>
                 </div>
+                <div className="p-6 flex-1">
+                  <p className="text-xs text-slate-500 mb-6 italic">Execute standard connectivity handshake.</p>
+                  <button 
+                    onClick={runTest}
+                    disabled={testLoading || !status?.configured}
+                    className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-800/80 disabled:text-slate-600 rounded-lg font-bold text-xs uppercase tracking-widest transition-all text-white"
+                  >
+                    <Send className={`w-3.5 h-3.5 ${testLoading ? 'animate-pulse' : ''}`} />
+                    {testLoading ? 'PROBING...' : 'RUN TEST'}
+                  </button>
 
-                <AnimatePresence>
+                  <AnimatePresence>
                   {testResult && (
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="mt-8 border-t border-slate-800 pt-8"
+                      className="mt-6 border-t border-slate-800 pt-6"
                     >
-                      <div className={`flex items-center gap-2 mb-4 text-xs font-bold uppercase tracking-wider ${testResult.success ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {testResult.success ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                        {testResult.success ? 'Integrity Verified' : 'Handshake Failed'}
-                      </div>
-                      <pre className="p-4 bg-slate-950/80 rounded-lg font-mono text-[11px] text-slate-400 overflow-x-auto border border-slate-800 ring-1 ring-inset ring-white/[0.02]">
+                      <pre className="p-4 bg-slate-950 rounded-lg font-mono text-[10px] text-slate-400 overflow-x-auto border border-slate-800">
                         {JSON.stringify(testResult, null, 2)}
                       </pre>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </div>
+                </div>
+              </motion.div>
 
-              <div className="mt-auto p-6 bg-slate-950 border-t border-slate-800">
-                <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] mb-4">Functional Benefits</h3>
-                <div className="grid grid-cols-3 gap-6">
+              {/* Logs Card */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col"
+              >
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-white">Execution Logs</h3>
+                  <span className="text-[10px] font-mono text-slate-500">Last 10</span>
+                </div>
+                <div className="p-4 flex-1 max-h-[400px] overflow-y-auto">
+                  <div className="space-y-3">
+                    {logs.length === 0 ? (
+                      <div className="text-center py-8 text-xs text-slate-600 font-mono uppercase tracking-widest italic font-bold opacity-30">
+                        No activity recorded
+                      </div>
+                    ) : (
+                      logs.map((log) => (
+                        <div key={log.id} className="p-3 bg-slate-950/50 border border-white/[0.03] rounded-lg group hover:border-slate-700 transition-colors">
+                          <div className="flex items-center justify-between mb-2">
+                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${log.status === 'SUCCESS' ? 'text-emerald-400 bg-emerald-400/5' : 'text-rose-400 bg-rose-400/5'}`}>
+                              {log.status}
+                            </span>
+                             <span className="text-[9px] font-mono text-slate-600">
+                              {new Date(log.timestamp).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-bold text-slate-400 mb-1 flex items-center gap-2 uppercase tracking-wide">
+                            <Terminal className="w-3 h-3 text-cyan-500" />
+                            {log.type}
+                          </div>
+                          {log.details.error && (
+                            <div className="text-[10px] text-rose-500/80 bg-rose-500/5 p-2 rounded mt-2 border border-rose-500/10 font-mono break-all">
+                              ERR: {log.details.error}
+                            </div>
+                          )}
+                          {log.details.email_id && (
+                            <div className="text-[10px] text-cyan-400/80 mt-1 font-mono">
+                              ID: {log.details.email_id}
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* Documentation / Why it works */}
+             <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-8"
+              >
+                 <h3 className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] mb-6">Automation Blueprint</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                   <Benefit label="Bolt Support" text="Persistent low-latency socket handshake." />
                   <Benefit label="Retry Logic" text="Auto-handles transactional bottlenecks." />
                   <Benefit label="Clean Auth" text="Bypass gateway mapping abstractions." />
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
           </div>
         </div>
 

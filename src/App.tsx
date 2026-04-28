@@ -124,6 +124,29 @@ export default function App() {
                 <div className="w-full text-center p-3 border border-slate-700 bg-slate-800/50 rounded-lg text-xs font-mono uppercase tracking-widest text-slate-400">Neo4j Aura</div>
               </div>
             </motion.div>
+
+            {/* Ingest Endpoint Docs */}
+            <motion.div 
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.15 }}
+              className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-xl"
+            >
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Network className="w-5 h-5 text-indigo-400" />
+                Ingest Endpoint
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-[10px] uppercase text-indigo-400 font-bold mb-1 tracking-wider">Target URI</p>
+                  <code className="text-xs bg-slate-950 p-2 rounded block border border-slate-800 text-indigo-300">/api/ingest</code>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase text-indigo-400 font-bold mb-1 tracking-wider">Graph Logic</p>
+                  <p className="text-xs text-slate-500 italic leading-relaxed">Automatically parses e-mail subjects, projects, and people into a linked Neo4j graph structure.</p>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
           {/* Right Column: Interactive Console & Testing */}

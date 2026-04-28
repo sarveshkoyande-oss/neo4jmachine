@@ -47,6 +47,47 @@ app.post('/api/write', async (req, res) => {
   }
 });
 
+app.post('/api/ingest', async (req, res) => {
+  const currentDriver = getDriver();
+  const session = currentDriver.session();
+  const data = req.body;
+
+  const cypher = `
+    MERGE (e:Email {id: $email_id})
+    SET e.subject = $subject, e.text = $original_text, e.processedAt = datetime()
+    WITH e
+    UNWIND $topics AS topic
+    MERGE (t:Topic {name: topic})
+    MERGE (e)-[:DISCUSSES]->(t)
+    WITH e
+    UNWIND $project_names AS projectName
+    MERGE (p:Project {name: projectName})
+    MERGE (e)-[:RELATED_TO_PROJECT]->(p)
+    WITH e
+    UNWIND $people_mentioned AS personName
+    MERGE (per:Person {name: personName})
+    MERGE (e)-[:MENTIONS]->(per)
+    WITH e
+    UNWIND $decisions AS decision
+    CREATE (d:Decision {text: decision, timestamp: datetime()})
+    MERGE (e)-[:RESULTED_IN]->(d)
+    WITH e
+    UNWIND $risks AS risk
+    CREATE (r:Risk {text: risk})
+    MERGE (e)-[:IDENTIFIED_RISK]->(r)
+    RETURN e.id as id
+  `;
+
+  try {
+    await session.run(cypher, data);
+    res.json({ success: true, message: 'Graph updated' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    await session.close();
+  }
+});
+
 app.post('/api/query', async (req, res) => {
   const currentDriver = getDriver();
   const { cypher, params } = req.body;

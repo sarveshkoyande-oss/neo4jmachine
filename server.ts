@@ -73,6 +73,57 @@ async function startServer() {
     }
   });
 
+  // Specialized endpoint for Power Automate Email Pipeline
+  app.post('/api/ingest', async (req, res) => {
+    const currentDriver = getDriver();
+    if (!currentDriver) return res.status(500).json({ error: 'Database not connected' });
+
+    const data = req.body;
+    const session = currentDriver.session();
+
+    const cypher = `
+      MERGE (e:Email {id: $email_id})
+      SET e.subject = $subject, e.text = $original_text, e.processedAt = datetime()
+      
+      WITH e
+      UNWIND $topics AS topic
+      MERGE (t:Topic {name: topic})
+      MERGE (e)-[:DISCUSSES]->(t)
+      
+      WITH e
+      UNWIND $project_names AS projectName
+      MERGE (p:Project {name: projectName})
+      MERGE (e)-[:RELATED_TO_PROJECT]->(p)
+      
+      WITH e
+      UNWIND $people_mentioned AS personName
+      MERGE (per:Person {name: personName})
+      MERGE (e)-[:MENTIONS]->(per)
+      
+      WITH e
+      UNWIND $decisions AS decision
+      CREATE (d:Decision {text: decision, timestamp: datetime()})
+      MERGE (e)-[:RESULTED_IN]->(d)
+      
+      WITH e
+      UNWIND $risks AS risk
+      CREATE (r:Risk {text: risk, severity: 'Unknown'})
+      MERGE (e)-[:IDENTIFIED_RISK]->(r)
+      
+      RETURN e.id as id
+    `;
+
+    try {
+      await session.run(cypher, data);
+      res.json({ success: true, message: 'Email data ingested and mapped to graph.' });
+    } catch (error: any) {
+      console.error('Ingest Error:', error);
+      res.status(500).json({ error: error.message });
+    } finally {
+      await session.close();
+    }
+  });
+
   app.post('/api/query', async (req, res) => {
     const currentDriver = getDriver();
     if (!currentDriver) {
